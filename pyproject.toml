@@ -3,8 +3,22 @@ name = "rag"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "bm25s>=0.3.10",
     "fire>=0.7.1",
+    "langchain-text-splitters>=1.1.2",
     "ollama>=0.6.2",
     "pydantic>=2.13.4",
     "tqdm>=4.68.4",
 ]
+
+[tool.mypy]
+exclude = [
+    '^data/',
+]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "mypy>=2.2.0",
+]
+

@@ -1,2 +1,13 @@
 subject.pdf
-subject.txt
+.agents/subject.txt
+
+# Python artifacts and environments
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+
+# IDE
+.idea/
+
+data/
