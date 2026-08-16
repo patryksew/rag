@@ -1,10 +1,13 @@
-.PHONY: install run debug clean lint
+.PHONY: install run run-api debug clean lint
 
 install:
 	uv sync
 
 run:
 	uv run python -m src
+
+run-api:
+	uv run uvicorn src.api:app --reload
 
 debug:
 	uv run python -m pdb -m src

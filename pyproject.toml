@@ -4,11 +4,14 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "bm25s>=0.3.10",
+    "fastapi>=0.141.1",
     "fire>=0.7.1",
     "langchain-text-splitters>=1.1.2",
+    "mypy>=2.2.0",
     "ollama>=0.6.2",
     "pydantic>=2.13.4",
     "tqdm>=4.68.4",
+    "uvicorn>=0.52.3",
 ]
 
 [tool.mypy]
