@@ -7,14 +7,36 @@ from src.answer_generator import AnswerGenerator
 from src.evaluator import Evaluator
 from src.models import RagDataset, StudentSearchResults
 from src.retriever import Retriever
-from src.indexer import BM25Indexer
+
+from src.indexer import BM25Indexer, EmbeddingIndexer
 
 
 class RAGCLI:
     """RAG against the machine Command-Line Interface."""
 
-    def __init__(self) -> None:
+    def __init__(self, method: str = "lexical") -> None:
+        import os
+        os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
+
         self.project_root = Path(__file__).resolve().parent.parent
+
+        if method not in ("lexical", "embedding"):
+            print(">" * 20, f" Invalid method '{method}'. Using 'lexical' instead.", "<" * 20,
+                  sep="")
+            self.method = "lexical"
+        else:
+            self.method = method
+
+        if self.method == "embedding":
+            try:
+                import torch  # noqa: F401
+                import sentence_transformers  # noqa: F401
+            except ImportError:
+                print("Error: The 'embedding' method requires optional dependencies.",
+                      file=sys.stderr)
+                print("Please install them by running: uv sync --extra embeddings",
+                      file=sys.stderr)
+                sys.exit(1)
 
     @staticmethod
     def _validate_max_chunk_size(max_chunk_size: int | str) -> int:
@@ -44,7 +66,13 @@ class RAGCLI:
         Retriever
             An instance of a Retriever object after processing the files.
         """
-        indexer = BM25Indexer(max_chunk_size)
+        from src.indexer import Indexer
+        indexer: Indexer
+        if self.method == "embedding":
+            indexer = EmbeddingIndexer(max_chunk_size)
+        else:
+            indexer = BM25Indexer(max_chunk_size)
+
         return indexer.process_files_from_directory(self.project_root / "data" / "raw")
 
     def index(self, max_chunk_size: int = 2000) -> None:

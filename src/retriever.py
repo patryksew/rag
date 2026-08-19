@@ -1,6 +1,7 @@
 import uuid
 from abc import ABC, abstractmethod
 
+from chromadb import Collection as ChromaCollection
 from tqdm import tqdm
 import bm25s
 
@@ -12,6 +13,7 @@ class Retriever(ABC):
     """
     Abstract base class for information retrieval.
     """
+
     @abstractmethod
     def retrieve(self, queries: list[UnansweredQuestion], k: int = 5) -> StudentSearchResults:
         """
@@ -45,6 +47,7 @@ class BM25Retriever(Retriever):
     """
     Retriever implementation using the BM25 algorithm.
     """
+
     def __init__(self, retriever: bm25s.BM25):
         """
         Initialize the BM25Retriever.
@@ -65,6 +68,9 @@ class BM25Retriever(Retriever):
         Returns:
             StudentSearchResults: The BM25 retrieval results for the queries.
         """
+        if not queries:
+            return StudentSearchResults(search_results=[], k=k)
+
         tokens = bm25s.tokenize([preprocess_text(q.question) for q in queries],
                                 show_progress=len(queries) > 1)
         results, scores = self._retriever.retrieve(tokens, k=k)
@@ -115,4 +121,74 @@ class BM25Retriever(Retriever):
             question_id=str(uuid.uuid4()),
             question=query,
             retrieved_sources=sources
+        )
+
+
+class EmbeddingRetriever(Retriever):
+    def __init__(self, collection: ChromaCollection) -> None:
+        self._collection = collection
+
+    def retrieve_one(self, query: str, k: int = 5) -> MinimalSearchResults:
+        if not query or k <= 0:
+            return MinimalSearchResults(
+                question_id=str(uuid.uuid4()),
+                question=query,
+                retrieved_sources=[]
+            )
+
+        results = self._collection.query(
+            query_texts=[query],
+            n_results=k
+        )
+
+        metadatas = results["metadatas"]
+        assert metadatas is not None
+        metadata = metadatas[0]
+
+        sources = [MinimalSource.model_validate(result) for result in metadata]
+
+        return MinimalSearchResults(
+            question_id=str(uuid.uuid4()),
+            question=query,
+            retrieved_sources=sources
+        )
+
+    def retrieve(self, queries: list[UnansweredQuestion], k: int = 5) -> StudentSearchResults:
+        if not queries or k <= 0:
+            return StudentSearchResults(search_results=[], k=k)
+
+        valid_queries = [q for q in queries if q.question]
+
+        if valid_queries:
+            results = self._collection.query(
+                query_texts=[q.question for q in valid_queries],
+                n_results=k
+            )
+            metadatas = results["metadatas"]
+            assert metadatas is not None
+        else:
+            metadatas = []
+
+        mapped_results: list[MinimalSearchResults] = []
+        valid_idx = 0
+
+        for query in queries:
+            if query.question:
+                metadata = metadatas[valid_idx]
+                sources = [MinimalSource.model_validate(result) for result in metadata]
+                valid_idx += 1
+            else:
+                sources = []
+
+            mapped_results.append(
+                MinimalSearchResults(
+                    question_id=query.question_id,
+                    question=query.question,
+                    retrieved_sources=sources
+                )
+            )
+
+        return StudentSearchResults(
+            search_results=mapped_results,
+            k=k
         )
