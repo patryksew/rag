@@ -8,8 +8,6 @@ from src.evaluator import Evaluator
 from src.models import RagDataset, StudentSearchResults
 from src.retriever import Retriever
 
-from src.indexer import BM25Indexer, EmbeddingIndexer
-
 
 class RAGCLI:
     """RAG against the machine Command-Line Interface."""
@@ -66,11 +64,13 @@ class RAGCLI:
         Retriever
             An instance of a Retriever object after processing the files.
         """
-        from src.indexer import Indexer
+        from src.indexers.base import Indexer
         indexer: Indexer
         if self.method == "embedding":
+            from src.indexers.embedding import EmbeddingIndexer
             indexer = EmbeddingIndexer(max_chunk_size)
         else:
+            from src.indexers.bm25 import BM25Indexer
             indexer = BM25Indexer(max_chunk_size)
 
         return indexer.process_files_from_directory(self.project_root / "data" / "raw")

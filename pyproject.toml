@@ -32,6 +32,7 @@ exclude = [
     '^data/',
     '^\.venv/',
 ]
+cache_dir = "~/goinfre/.cache/mypy"
 
 [dependency-groups]
 dev = [

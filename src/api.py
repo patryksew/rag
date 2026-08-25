@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from src.models import MinimalAnswer
 from src.answer_generator import AnswerGenerator
-from src.indexer import BM25Indexer
+from src.indexers.bm25 import BM25Indexer
 from src.models import MinimalSearchResults
 
 

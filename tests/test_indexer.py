@@ -6,7 +6,7 @@ from typing import Iterator, cast, Any, Dict
 import chromadb
 from chromadb import EmbeddingFunction, Documents, Embeddings
 from chromadb.errors import NotFoundError
-from src.indexer import EmbeddingIndexer
+from src.indexers.embedding import EmbeddingIndexer
 from src.retriever import EmbeddingRetriever
 
 
@@ -40,7 +40,7 @@ class TestEmbeddingIndexer:
             self.ephemeral_client.delete_collection("embeddings")
         except NotFoundError:
             pass
-        with (patch("src.indexer.chromadb.PersistentClient") as mock_client,
+        with (patch("src.indexers.embedding.chromadb.PersistentClient") as mock_client,
               patch.object(EmbeddingIndexer, "_get_embedding_function") as mock_embed_fn):
             mock_client.return_value = self.ephemeral_client
             mock_embed_fn.return_value = DummyEmbeddingFunction()
