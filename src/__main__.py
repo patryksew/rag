@@ -25,17 +25,6 @@ class RAGCLI:
         else:
             self.method = method
 
-        if self.method == "embedding":
-            try:
-                import torch  # noqa: F401
-                import sentence_transformers  # noqa: F401
-            except ImportError:
-                print("Error: The 'embedding' method requires optional dependencies.",
-                      file=sys.stderr)
-                print("Please install them by running: uv sync --extra embeddings",
-                      file=sys.stderr)
-                sys.exit(1)
-
     @staticmethod
     def _validate_max_chunk_size(max_chunk_size: int | str) -> int:
         """Validate the maximum chunk size parameter."""

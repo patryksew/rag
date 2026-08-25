@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import cast
 
 import chromadb
-import torch.cuda
 from chromadb import Where, EmbeddingFunction
 from chromadb.utils import embedding_functions
 from tqdm import tqdm
@@ -17,13 +16,16 @@ class EmbeddingIndexer(Indexer):
 
     @staticmethod
     def _get_embedding_function() -> EmbeddingFunction:
-        if torch.cuda.is_available():
-            return embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name="BAAI/bge-small-en-v1.5",
-                device="cuda"
-            )
-        else:
-            return embedding_functions.DefaultEmbeddingFunction()
+        try:
+            import torch.cuda
+            if torch.cuda.is_available():
+                return embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name="BAAI/bge-small-en-v1.5",
+                    device="cuda"
+                )
+        except ImportError:
+            pass
+        return embedding_functions.DefaultEmbeddingFunction()
 
     # noinspection deprecation
     # because of embedding_fn.name(), which is incorrectly marked as deprecated
