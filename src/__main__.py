@@ -3,10 +3,8 @@ import sys
 
 import fire
 
-from src.answer_generator import AnswerGenerator
 from src.evaluator import Evaluator
 from src.models import RagDataset, StudentSearchResults
-from src.retriever import Retriever
 
 
 class RAGCLI:
@@ -16,7 +14,8 @@ class RAGCLI:
         import os
         os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
 
-        self.project_root = Path(__file__).resolve().parent.parent
+        from src.core import RAGCore
+        self.core = RAGCore()
 
         if method not in ("lexical", "embedding"):
             print(">" * 20, f" Invalid method '{method}'. Using 'lexical' instead.", "<" * 20,
@@ -41,29 +40,6 @@ class RAGCLI:
 
         return valid_size
 
-    def _index(self, max_chunk_size: int) -> Retriever:
-        """
-        Indexes files from a specified directory.
-
-        Parameters:
-        max_chunk_size: int
-            The maximum size of chunks in the indexed data.
-
-        Returns:
-        Retriever
-            An instance of a Retriever object after processing the files.
-        """
-        from src.indexers.base import Indexer
-        indexer: Indexer
-        if self.method == "embedding":
-            from src.indexers.embedding import EmbeddingIndexer
-            indexer = EmbeddingIndexer(max_chunk_size)
-        else:
-            from src.indexers.bm25 import BM25Indexer
-            indexer = BM25Indexer(max_chunk_size)
-
-        return indexer.process_files_from_directory(self.project_root / "data" / "raw")
-
     def index(self, max_chunk_size: int = 2000) -> None:
         """
         Ingest data/raw/ and build the index under data/processed/.
@@ -71,15 +47,8 @@ class RAGCLI:
         Args:
             max_chunk_size: Maximum chunk size in characters (default: 2000).
         """
-
-        # # REMOVE THIS PART !!!!!!!!!!!!!!!!!
-        # processed_dir = self.project_root / "data" / "processed"
-        # if processed_dir.exists():
-        #     import shutil
-        #     shutil.rmtree(processed_dir)
-
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        self._index(max_chunk_size)
+        self.core.get_retriever(self.method, max_chunk_size)
 
     def search(self, query: str, k: int = 5, max_chunk_size: int = 2000) -> None:
         """
@@ -91,7 +60,7 @@ class RAGCLI:
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        retriever = self._index(max_chunk_size)
+        retriever = self.core.get_retriever(self.method, max_chunk_size)
         result = retriever.retrieve_one(query, k=k)
         print(result.model_dump_json(indent=4))
 
@@ -117,7 +86,7 @@ class RAGCLI:
             print(f"Error reading or parsing dataset file: {e}", file=sys.stderr)
             sys.exit(1)
 
-        retriever = self._index(max_chunk_size)
+        retriever = self.core.get_retriever(self.method, max_chunk_size)
         results = retriever.retrieve(dataset.rag_questions, k)
 
         save_path = Path(save_directory)
@@ -141,11 +110,10 @@ class RAGCLI:
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        retriever = self._index(max_chunk_size)
+        retriever = self.core.get_retriever(self.method, max_chunk_size)
         result = retriever.retrieve_one(query, k)
 
-        answer_generator = AnswerGenerator()
-        print(answer_generator.answer_one(query, result.retrieved_sources))
+        print(self.core.answer_generator.answer_one(query, result.retrieved_sources))
 
     def answer_dataset(
         self, student_search_results_path: str, save_directory: str
@@ -171,7 +139,7 @@ class RAGCLI:
             print(f"Error reading or parsing search results file: {e}", file=sys.stderr)
             sys.exit(1)
 
-        result = AnswerGenerator().answer_dataset(student_search_results)
+        result = self.core.answer_generator.answer_dataset(student_search_results)
 
         file_name = Path(student_search_results_path).name
         Path(save_directory).mkdir(parents=True, exist_ok=True)
