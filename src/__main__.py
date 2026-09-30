@@ -17,7 +17,7 @@ class RAGCLI:
         from src.core import RAGCore
         self.core = RAGCore()
 
-        if method not in ("lexical", "embedding"):
+        if method not in ("lexical", "embedding", "hybrid"):
             print(">" * 20, f" Invalid method '{method}'. Using 'lexical' instead.", "<" * 20,
                   sep="")
             self.method = "lexical"

@@ -1,7 +1,12 @@
 import pytest
 from unittest.mock import MagicMock
-from src.retriever import EmbeddingRetriever
-from src.models import MinimalSearchResults, StudentSearchResults, UnansweredQuestion
+from src.retriever import EmbeddingRetriever, HybridRetriever
+from src.models import (
+    MinimalSearchResults,
+    MinimalSource,
+    StudentSearchResults,
+    UnansweredQuestion,
+)
 
 
 class TestEmbeddingRetriever:
@@ -138,3 +143,97 @@ class TestEmbeddingRetriever:
             assert len(res_multi.search_results[0].retrieved_sources) == 0
 
         mock_collection.query.assert_not_called()
+
+
+class TestHybridRetrieverRRF:
+    """Tests for the Reciprocal Rank Fusion (RRF) logic in HybridRetriever."""
+
+    @pytest.fixture
+    def sample_sources(self) -> list[MinimalSource]:
+        """Provide distinct MinimalSource instances for testing."""
+        return [
+            MinimalSource(
+                file_path="a.py", first_character_index=0, last_character_index=100
+            ),
+            MinimalSource(
+                file_path="b.py", first_character_index=0, last_character_index=100
+            ),
+            MinimalSource(
+                file_path="c.py", first_character_index=0, last_character_index=100
+            ),
+            MinimalSource(
+                file_path="d.py", first_character_index=0, last_character_index=100
+            ),
+        ]
+
+    def test_rrf_empty_inputs(self) -> None:
+        """Verify that empty inputs produce an empty list."""
+        assert HybridRetriever._rrf([], k=5) == []
+        assert HybridRetriever._rrf([[], []], k=5) == []
+
+    def test_rrf_single_retriever_order(
+        self, sample_sources: list[MinimalSource]
+    ) -> None:
+        """Verify that a single retriever list preserves relative ranking."""
+        src_a, src_b, src_c = sample_sources[:3]
+        results = HybridRetriever._rrf([[src_a, src_b, src_c]], k=3)
+
+        assert results == [src_a, src_b, src_c]
+
+    def test_rrf_overlapping_sources_fused_score(
+        self, sample_sources: list[MinimalSource]
+    ) -> None:
+        """Verify that sources retrieved by multiple systems rank higher."""
+        src_a, src_b, src_c = sample_sources[:3]
+        # Retriever 1: [src_a, src_b]
+        # Retriever 2: [src_b, src_c]
+        # src_b appears in both and should accumulate a higher score than src_a
+        results = HybridRetriever._rrf([[src_a, src_b], [src_b, src_c]], k=3)
+
+        assert results[0] == src_b
+        assert results[1] == src_a
+        assert results[2] == src_c
+
+    def test_rrf_k_parameter(
+        self, sample_sources: list[MinimalSource]
+    ) -> None:
+        """Verify that k limits the output size appropriately."""
+        src_a, src_b, src_c = sample_sources[:3]
+        res_k1 = HybridRetriever._rrf([[src_a, src_b, src_c]], k=1)
+        assert len(res_k1) == 1
+        assert res_k1 == [src_a]
+
+        res_k0 = HybridRetriever._rrf([[src_a, src_b, src_c]], k=0)
+        assert res_k0 == []
+
+        res_k_large = HybridRetriever._rrf([[src_a, src_b]], k=10)
+        assert len(res_k_large) == 2
+        assert res_k_large == [src_a, src_b]
+
+    def test_rrf_identical_lists(
+        self, sample_sources: list[MinimalSource]
+    ) -> None:
+        """Verify that duplicate lists preserve order and deduplicate sources."""
+        src_a, src_b = sample_sources[:2]
+        results = HybridRetriever._rrf([[src_a, src_b], [src_a, src_b]], k=5)
+
+        assert results == [src_a, src_b]
+
+    def test_rrf_more_than_k_elements(
+        self, sample_sources: list[MinimalSource]
+    ) -> None:
+        """Verify that when more than k unique elements are fused, only top-k are returned."""
+        src_a, src_b, src_c, src_d = sample_sources
+        # 4 unique candidates, strictly distinct fused scores:
+        # src_b: rank 1 in L1 (1/62) + rank 0 in L2 (1/61) -> highest
+        # src_a: rank 0 in L1 (1/61)                       -> second
+        # src_d: rank 1 in L2 (1/62)                       -> third
+        # src_c: rank 2 in L1 (1/63)                       -> fourth
+        results = HybridRetriever._rrf(
+            [[src_a, src_b, src_c], [src_b, src_d]], k=2
+        )
+
+        assert len(results) == 2
+        assert results == [src_b, src_a]
+        assert src_d not in results
+        assert src_c not in results

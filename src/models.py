@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MinimalSource(BaseModel):
@@ -13,6 +13,8 @@ class MinimalSource(BaseModel):
         first_character_index (int): Starting character position of the chunk.
         last_character_index (int): Ending character position of the chunk.
     """
+    model_config = ConfigDict(frozen=True)
+
     file_path: str
     first_character_index: int = Field(ge=0)
     last_character_index: int = Field(ge=0)

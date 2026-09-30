@@ -7,7 +7,7 @@ from chromadb.utils import embedding_functions
 from tqdm import tqdm
 
 from src.chunker import Chunker
-from src.retriever import Retriever, EmbeddingRetriever
+from src.retriever import EmbeddingRetriever
 from src.models import ChunkData
 from src.indexers.base import Indexer
 from src.ollama_utils import ensure_model_is_pulled
@@ -74,7 +74,7 @@ class EmbeddingIndexer(Indexer):
                 ]
             )
 
-    def process_files_from_directory(self, directory: Path) -> Retriever:
+    def process_files_from_directory(self, directory: Path) -> EmbeddingRetriever:
         target_files = self._get_target_files(directory)
         cache = self._load_cache()
         deltas = self._get_file_deltas(target_files, cache)

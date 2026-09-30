@@ -1,5 +1,6 @@
 import uuid
 from abc import ABC, abstractmethod
+from collections import defaultdict
 
 from chromadb import Collection as ChromaCollection
 from tqdm import tqdm
@@ -192,3 +193,63 @@ class EmbeddingRetriever(Retriever):
             search_results=mapped_results,
             k=k
         )
+
+
+class HybridRetriever(Retriever):
+    def __init__(self, bm25: BM25Retriever, embedding: EmbeddingRetriever):
+        self.bm25_retriever = bm25
+        self.embedding_retriever = embedding
+
+    @staticmethod
+    def _rrf(results: list[list[MinimalSource]], k: int = 5) -> list[MinimalSource]:
+        """Reciprocal Rank Fusion"""
+
+        rrf_k = 60
+
+        reranked: dict[MinimalSource, float] = defaultdict(float)
+
+        for result_list in results:
+            for rank, result in enumerate(result_list):
+                reranked[result] += 1 / (rrf_k + rank + 1)
+
+        sorted_sources = sorted(reranked, key=lambda s: reranked[s], reverse=True)
+
+        return sorted_sources[:k]
+
+    def retrieve_one(self, query: str, k: int = 5) -> MinimalSearchResults:
+        bm25_results = self.bm25_retriever.retrieve_one(query, k=k)
+        embedding_results = self.embedding_retriever.retrieve_one(query, k=k)
+        rrf_results = self._rrf(
+            [bm25_results.retrieved_sources, embedding_results.retrieved_sources],
+            k=k)
+
+        return MinimalSearchResults(
+            question_id=str(uuid.uuid4()),
+            question=query,
+            retrieved_sources=rrf_results
+        )
+
+    def retrieve(self, queries: list[UnansweredQuestion], k: int = 5) -> StudentSearchResults:
+        bm25_results = self.bm25_retriever.retrieve(queries, k=k*2).search_results
+        embedding_results = self.embedding_retriever.retrieve(queries, k=k*2).search_results
+
+        final_results = StudentSearchResults(search_results=[], k=k)
+
+        for a, b in zip(bm25_results, embedding_results):
+            # Should never happen, but just to be sure
+            if a.question != b.question:
+                raise ValueError("Questions do not match")
+            if a.question_id != b.question_id:
+                raise ValueError("Question IDs do not match")
+
+            rrf_results = self._rrf([a.retrieved_sources, b.retrieved_sources], k=k)
+
+            final_results.search_results.append(
+                MinimalSearchResults(
+                    question_id=a.question_id,
+                    question=a.question,
+                    retrieved_sources=rrf_results
+                )
+            )
+
+        return final_results

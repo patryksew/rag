@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from src.chunker import Chunker
 from src.answer_generator import AnswerGenerator
 from src.indexers.base import Indexer
 from src.retriever import Retriever
@@ -37,6 +38,18 @@ class RAGCore:
                 elif method == "embedding":
                     from src.indexers.embedding import EmbeddingIndexer
                     indexer = EmbeddingIndexer(max_chunk_size)
+                elif method == "hybrid":
+                    from src.indexers.hybrid import HybridIndexer
+                    from src.indexers.bm25 import BM25Indexer
+                    from src.indexers.embedding import EmbeddingIndexer
+
+                    chunker = Chunker(max_chunk_size)
+                    indexer = HybridIndexer(
+                        bm25_indexer=BM25Indexer(max_chunk_size, chunker),
+                        embedding_indexer=EmbeddingIndexer(max_chunk_size, chunker),
+                        max_chunk_size=max_chunk_size,
+                        chunker=chunker
+                    )
                 else:
                     raise ValueError(f"Unknown method: {method}")
             except ImportError as e:

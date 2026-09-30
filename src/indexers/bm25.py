@@ -4,7 +4,7 @@ import bm25s
 from tqdm import tqdm
 
 from src.chunker import Chunker
-from src.retriever import Retriever, BM25Retriever
+from src.retriever import BM25Retriever
 from src.models import ChunkData
 from src.text_utils import preprocess_text
 from src.indexers.base import Indexer
@@ -38,7 +38,7 @@ class BM25Indexer(Indexer):
         self.delta = delta
         self.method = method
 
-    def _build_index(self, chunked_files: list[ChunkData]) -> Retriever:
+    def _build_index(self, chunked_files: list[ChunkData]) -> BM25Retriever:
         """
         Build the BM25 index from a list of chunks.
 
@@ -71,7 +71,7 @@ class BM25Indexer(Indexer):
         self._retriever = retriever
         return BM25Retriever(retriever)
 
-    def process_files_from_directory(self, directory: Path) -> Retriever:
+    def process_files_from_directory(self, directory: Path) -> BM25Retriever:
         """Process files from a directory incrementally and build a BM25 index.
 
         Scans the given directory for target files, checks them against a local cache
