@@ -10,22 +10,20 @@ from src.chunker import Chunker
 from src.retriever import Retriever, EmbeddingRetriever
 from src.models import ChunkData
 from src.indexers.base import Indexer
+from src.ollama_utils import ensure_model_is_pulled
 
 
 class EmbeddingIndexer(Indexer):
 
     @staticmethod
     def _get_embedding_function() -> EmbeddingFunction:
-        try:
-            import torch.cuda
-            if torch.cuda.is_available():
-                return embedding_functions.SentenceTransformerEmbeddingFunction(
-                    model_name="BAAI/bge-small-en-v1.5",
-                    device="cuda"
-                )
-        except ImportError:
-            pass
-        return embedding_functions.DefaultEmbeddingFunction()
+        MODEL_NAME = "all-minilm:l6-v2"
+
+        ensure_model_is_pulled(MODEL_NAME)
+
+        return embedding_functions.OllamaEmbeddingFunction(
+            model_name=MODEL_NAME
+        )
 
     # noinspection deprecation
     # because of embedding_fn.name(), which is incorrectly marked as deprecated

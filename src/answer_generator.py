@@ -4,17 +4,18 @@ from tqdm import tqdm
 
 from src.models import MinimalSource, StudentSearchResults, StudentSearchResultsAndAnswer, \
     MinimalAnswer
+from src.ollama_utils import ensure_model_is_pulled
 
 MODEL = "Qwen3:0.6b"
 
 
 class AnswerGenerator:
-    def __init__(self, host: str = "127.0.0.1:11434") -> None:
+    def __init__(self, host: str | None = None) -> None:
         """
         Initialize the AnswerGenerator.
 
         Args:
-            host (str): The host for the Ollama client (default: 127.0.0.1:11434).
+            host (str | None): The host for the Ollama client (default: None for default client).
         """
         try:
             self.client = self._get_client(host)
@@ -23,12 +24,16 @@ class AnswerGenerator:
         self._ensure_model_is_pulled()
 
     @staticmethod
-    def _get_client(host: str | None) -> ollama.Client:
+    def _get_client(host: str | None = None) -> ollama.Client:
         """
         Creates a Client and checks connection.
         If it doesn't work, tries with the default host (127.0.0.1:11434).
-        :param host:
-        :return: Ollama client
+
+        Args:
+            host (str | None): Ollama host.
+
+        Returns:
+            ollama.Client: Connected Ollama client.
         """
 
         client = ollama.Client(host=host)
@@ -48,22 +53,7 @@ class AnswerGenerator:
         """
         Ensures that the specified model is pulled.
         """
-        models_list = self.client.list()
-        if not any(m.model == MODEL for m in models_list.models):
-            progress = self.client.pull(MODEL, stream=True)
-            with tqdm(
-                unit="B",
-                unit_scale=True,
-                bar_format=f"Pulling {MODEL} | {{rate_fmt}} | {{elapsed}}"
-            ) as pbar:
-                completed_by_digest = {}
-                for update in progress:
-                    digest = update.digest
-                    if digest and update.completed is not None:
-                        completed_by_digest[digest] = update.completed
-                        pbar.n = sum(completed_by_digest.values())
-
-                    pbar.refresh()
+        ensure_model_is_pulled(MODEL)
 
     def answer_one(self, question: str, sources: list[MinimalSource]) -> str:
         """
