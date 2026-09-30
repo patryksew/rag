@@ -1,4 +1,4 @@
-.PHONY: install run run-api debug clean lint
+.PHONY: install run run-api debug clean lint test
 
 install:
 	uv sync
@@ -17,6 +17,9 @@ lint:
 	uv run flake8 . || status=1; \
 	uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs || status=1; \
 	exit $$status
+
+test:
+	uv run pytest
 
 clean:
 	rm -rf .venv
