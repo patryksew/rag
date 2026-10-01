@@ -11,9 +11,6 @@ class RAGCLI:
     """RAG against the machine Command-Line Interface."""
 
     def __init__(self, method: str = "lexical") -> None:
-        import os
-        os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
-
         from src.core import RAGCore
         self.core = RAGCore()
 
