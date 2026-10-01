@@ -21,12 +21,21 @@ class EmbeddingIndexer(Indexer):
 
         ensure_model_is_pulled(MODEL_NAME)
 
-        return embedding_functions.OllamaEmbeddingFunction(
-            model_name=MODEL_NAME
-        )
+        class Wrapper(EmbeddingFunction[chromadb.Documents]):
+            # noinspection protocol,missing-constructor
+            def __init__(self) -> None:
+                self._inner = embedding_functions.OllamaEmbeddingFunction(model_name=MODEL_NAME)
 
-    # noinspection deprecation
-    # because of embedding_fn.name(), which is incorrectly marked as deprecated
+            @staticmethod
+            def name() -> str:
+                return MODEL_NAME
+
+            # noinspection shadowing-builtins
+            def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
+                return self._inner(input)
+
+        return Wrapper()
+
     def __init__(self, max_chunk_size: int = 2000, chunker: Chunker | None = None) -> None:
 
         if chunker is None:
@@ -35,11 +44,14 @@ class EmbeddingIndexer(Indexer):
         super().__init__(max_chunk_size, chunker)
 
         embedding_fn = self._get_embedding_function()
-        self._processed_path = self._processed_path / "embedding" / embedding_fn.name()
-        self._cache_path = (
-            self._cache_path.parent / "embedding" / embedding_fn.name() / self._cache_path.name)
 
-        self._client = chromadb.PersistentClient(self._processed_path)
+        # noinspection deprecation
+        fn_name = embedding_fn.name()
+
+        self._cache_path = self._processed_path / "chromadb" / fn_name / "chunking.json"
+        self._processed_path = self._processed_path / "chromadb" / fn_name / "index"
+
+        self._client = chromadb.PersistentClient(path=self._processed_path)
         self._collection = self._client.get_or_create_collection(
             name="embeddings",
             embedding_function=embedding_fn,

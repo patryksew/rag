@@ -32,7 +32,8 @@ class BM25Indexer(Indexer):
             chunker = Chunker(max_chunk_size)
         super().__init__(max_chunk_size, chunker)
         self._retriever: bm25s.BM25 | None = None
-        self._processed_path = self._processed_path / "bm25"
+        self._cache_path = self._processed_path / "bm25" / "chunking.json"
+        self._processed_path = self._processed_path / "bm25" / "index"
         self.k1 = k1
         self.b = b
         self.delta = delta

@@ -52,7 +52,7 @@ class Indexer(ABC):
         self._chunker = chunker
         self._project_root = Path(__file__).resolve().parent.parent.parent
         self._processed_path = self._project_root / "data" / "processed" / str(max_chunk_size)
-        self._cache_path = self._processed_path / "cache" / "chunking.json"
+        self._cache_path: Path
 
     def _get_target_files(self, directory: Path) -> list[str]:
         """
