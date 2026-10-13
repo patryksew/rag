@@ -15,14 +15,6 @@ dependencies = [
     "uvicorn>=0.52.3",
 ]
 
-[project.optional-dependencies]
-embeddings = [
-    "torch",
-    "torchvision>=0.15.0",
-    "accelerate",
-    "sentence-transformers>=6.0.0",
-]
-
 [[tool.uv.index]]
 name = "pytorch"
 url = "https://download.pytorch.org/whl/rocm7.2"
