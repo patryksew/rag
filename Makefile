@@ -1,7 +1,5 @@
-.PHONY: install run api index search search-dataset search-docs search-code \
-	answer answer-dataset answer-docs answer-code \
-	evaluate evaluate-docs evaluate-code \
-	pipeline debug lint test clean
+.PHONY: install run api index search-dataset search-docs search-code \
+	answer  answer-docs answer-code evaluate-docs evaluate-code debug lint test clean
 
 # CLI configurable parameters
 METHOD ?= lexical
@@ -43,9 +41,6 @@ index:
 search:
 	uv run python -m src --method=$(METHOD) search "$(QUERY)" --k=$(K) --max_chunk_size=$(MAX_CHUNK_SIZE)
 
-search-dataset:
-	uv run python -m src --method=$(METHOD) search_dataset --dataset_path=$(DATASET_PATH) --save_directory=$(SAVE_DIRECTORY) --k=$(K) --max_chunk_size=$(MAX_CHUNK_SIZE)
-
 search-docs:
 	uv run python -m src --method=$(METHOD) search_dataset --dataset_path=$(DOCS_DATASET_PATH) --save_directory=$(SAVE_DIRECTORY) --k=$(K) --max_chunk_size=$(MAX_CHUNK_SIZE)
 
@@ -55,26 +50,17 @@ search-code:
 answer:
 	uv run python -m src --method=$(METHOD) answer "$(QUERY)" $(K) --max_chunk_size=$(MAX_CHUNK_SIZE)
 
-answer-dataset:
-	uv run python -m src answer_dataset --student_search_results_path=$(STUDENT_SEARCH_RESULTS_PATH) --save_directory=$(ANSWER_SAVE_DIRECTORY)
-
 answer-docs:
 	uv run python -m src answer_dataset --student_search_results_path=$(DOCS_STUDENT_RESULTS_PATH) --save_directory=$(ANSWER_SAVE_DIRECTORY)
 
 answer-code:
 	uv run python -m src answer_dataset --student_search_results_path=$(CODE_STUDENT_RESULTS_PATH) --save_directory=$(ANSWER_SAVE_DIRECTORY)
 
-evaluate:
-	uv run python -m src evaluate --student_search_results_path=$(STUDENT_SEARCH_RESULTS_PATH) --dataset_path=$(EVAL_DATASET_PATH)
-
 evaluate-docs:
 	uv run python -m src evaluate --student_search_results_path=$(DOCS_STUDENT_RESULTS_PATH) --dataset_path=$(DOCS_GROUND_TRUTH_PATH)
 
 evaluate-code:
 	uv run python -m src evaluate --student_search_results_path=$(CODE_STUDENT_RESULTS_PATH) --dataset_path=$(CODE_GROUND_TRUTH_PATH)
-
-pipeline:
-	uv run python run_pipeline.py
 
 debug:
 	uv run python -m pdb -m src

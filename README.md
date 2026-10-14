@@ -6,7 +6,7 @@ A modular, local Retrieval-Augmented Generation (RAG) system built to index and 
 codebases and technical documentation, targeting the [vLLM](https://github.com/vllm-project/vllm)
 repository. The system pairs language-aware text chunking with lexical, semantic, and hybrid
 retrieval engines, feeding retrieved contexts into a locally hosted small language model
-(`Qwen3:0.6b` via Ollama) to answer developer questions accurately and concisely.
+(`Qwen/Qwen3-0.6B`, served through Ollama) to answer developer questions accurately and concisely.
 
 ```
        ┌────────────────┐
@@ -53,24 +53,6 @@ system parses, segments, indexes, and queries these resources on local consumer 
 The primary objective is to achieve high retrieval accuracy (measured by **Recall@k**) and produce
 concise, factual answers to technical queries, while maintaining an extensible software architecture
 that complies with strict typing, linting, and performance constraints.
-
-### Key Capabilities
-
-- **Language-Aware Document Chunking**: Specialized segmentation routines for Python source files
-  and Markdown documents, maintaining syntactic boundaries and enriched metadata headers.
-- **Multi-Modal Retrieval**:
-    - **Lexical Search**: BM25 algorithm using the `bm25s` library with Lucene-style scoring.
-    - **Semantic Vector Search**: Dense vector embeddings generated via `all-minilm:l6-v2` stored in
-      a persistent ChromaDB database.
-    - **Hybrid Search**: Reciprocal Rank Fusion (RRF) merging lexical precision with semantic
-      understanding.
-- **Local Language Model Inference**: On-premise generation utilizing Ollama with `Qwen3:0.6b`.
-- **Incremental Indexing**: File modification tracking (`mtime`) preventing redundant re-chunking
-  and re-embedding.
-- **Two-Tier Caching**: Separate caching for document chunking, search queries, and synthesized
-  answers.
-- **Dual Interfaces**: Full-featured Command-Line Interface (CLI) powered by Python Fire alongside
-  an asynchronous REST API built with FastAPI.
 
 ---
 
@@ -199,9 +181,9 @@ offsets in the original raw source file:
 
 ## Retrieval Method & Ranking Mechanism
 
-The system supports three retrieval methods selectable via `--method`:
+The system supports three retrieval methods selectable via `--method` (default: `lexical`):
 
-### 1. Lexical Retrieval (`bm25`)
+### 1. Lexical Retrieval (`lexical`)
 
 - **Engine**: Implemented via `bm25s` with Lucene scoring parameters:
     - $k_1 = 1.5$ (term frequency saturation)
@@ -245,8 +227,9 @@ Vector Candidates (Top 2k)    ──┘
 ## Performance Analysis
 
 System evaluation measures **Recall@k** against ground-truth datasets
-(`data/datasets/AnsweredQuestions/`). A retrieved source is deemed relevant if its character span
-overlaps with the ground truth answer span by at least one character.
+(`data/datasets/AnsweredQuestions/`). A retrieved source counts as relevant if it is in the same
+file as a ground-truth source and their character ranges overlap with an Intersection over Union
+(IoU) of at least `0.05`.
 
 ### Benchmark Results
 
@@ -280,8 +263,26 @@ files / 14,635 chunks):
 - **Corpus Indexing**: Both BM25 (`1.56s`) and ChromaDB vector indexing (`142.90s` from scratch)
   execute well below the 5-minute threshold.
 - **Retrieval Throughput**: Evaluating the full public test dataset (199 questions) completes in
-  `0.21s` (Lexical), `0.91s` (Embedding), and `1.25s` (Hybrid), drastically outperforming the
-  subject constraint of $\le 90$s for 200 questions.
+  `1s` (Lexical), `4s` (Embedding), and `5s` (Hybrid), drastically outperforming the subject
+  constraint of $\le 90$s for 200 questions.
+
+### Effect of Chunk Size on Recall@k
+
+Lexical (BM25) retrieval, $k=5$:
+
+| `max_chunk_size` | Docs Recall@5 [%] | Code Recall@5 [%] |
+|:-----------------|:-----------------:|:-----------------:|
+| `2000`           |        84         |        80         |
+| `1500`           |        84         |        77         |
+| `1000`           |        85         |        75         |
+| `500`            |        82         |        72         |
+
+Docs recall barely changes with chunk size (82–85%), peaking at `1000` and only dropping slightly at
+`500`. Markdown sections are usually short and self-contained, so smaller chunks still keep a
+heading together with its explanation. Code recall, on the other hand, drops steadily as chunks get
+smaller (80% → 72%). Smaller chunks are more likely to split a function or class away from its
+signature, docstring, and surrounding identifiers, which removes the terms BM25 needs to match the
+question. `2000` gives the best overall balance and is kept as the default.
 
 ---
 
@@ -290,32 +291,20 @@ files / 14,635 chunks):
 - **Modular Indexer/Retriever Abstraction**: Base classes (`Indexer` and `Retriever`) define unified
   contracts. Adding new vector databases or embedding algorithms requires zero changes to core CLI
   or API logic.
-- **Partitioned Disk Storage**: Indexes and caches are partitioned by chunk size, retrieval method, and embedding model, while generated answers are kept in a global answer cache:
-  ```
-  data/processed/
-  ├── answer_cache.json                   # Global answer cache (keyed by query & source hash)
-  └── <max_chunk_size>/                   # Partitioned by chunk size
-      ├── bm25/
-      │   ├── chunking.json               # Incremental mtime cache
-      │   ├── search_cache.json           # Lexical query cache
-      │   └── index/                      # Serialized BM25 index
-      ├── chromadb/
-      │   └── all-minilm:l6-v2/
-      │       ├── chunking.json           # Incremental mtime cache
-      │       └── index/                  # Persistent ChromaDB vector store
-      ├── embedding/
-      │   └── all-minilm_l6-v2/
-      │       └── search_cache.json       # Embedding query cache
-      └── hybrid/
-          └── all-minilm_l6-v2/
-              └── search_cache.json       # Hybrid query cache
-  ```
-  This cleanly isolates third-party library files from application metadata and query caches.
+- **Partitioned Disk Storage**: Indexes and caches under `data/processed/` are partitioned by chunk
+  size, retrieval method, and embedding model, while generated answers are kept in a global answer
+  cache. This cleanly isolates third-party library files from application metadata and query caches.
+- **Model Flexibility & Cache Separation**: The models used for both embedding (default:
+  `all-minilm:l6-v2`) and answer generation (default: `Qwen3:0.6b`) can be changed for other models,
+  and caching will continue to work correctly because index and search caches are strictly isolated
+  and partitioned by model identifier. However, swapping models is not recommended: the current
+  models offer a well-tuned compromise between latency and quality. Using larger or more complex
+  models would take too much time on 42 machines.
 - **Strict Pydantic Validation**: All data exchanged across stages (`ChunkData`, `MinimalSource`,
   `MinimalSearchResults`, `StudentSearchResults`, `StudentSearchResultsAndAnswer`) is validated
   through immutable Pydantic models.
 - **Local-First & CPU Capable**: By leveraging `bm25s`, lightweight ChromaDB storage, and Ollama
-  with quantized models (`Qwen3:0.6b`, `all-minilm:l6-v2`), the entire pipeline runs reliably on
+  with small models (`Qwen/Qwen3-0.6B`, `all-minilm:l6-v2`), the entire pipeline runs reliably on
   standard CPU-only machines.
 - **Graceful Error Handling & Fallbacks**: Service connection drops (such as Ollama availability)
   are intercepted cleanly, reporting actionable diagnostics rather than unhandled tracebacks.
@@ -354,37 +343,24 @@ All five bonus objectives from Chapter IX of the subject are fully implemented:
 
 ### Requirements
 
-- **Operating System**: Linux (Ubuntu 22.04+ recommended) or macOS
 - **Python**: `>= 3.13`
 - **Package Manager**: [uv](https://github.com/astral-sh/uv)
-- **Model Server**: [Ollama](https://ollama.com/) (running locally)
 - **Build Utilities**: `make`
 
 ### Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository_url>
-   cd rag
-   ```
+Install project dependencies:
 
-2. **Install project dependencies**:
-   ```bash
-   make install
-   ```
-
-3. **Ensure Ollama is running and models are pulled**:
-   ```bash
-   ollama serve
-   ollama pull qwen3:0.6b
-   ollama pull all-minilm:l6-v2
-   ```
+```bash
+make install
+```
 
 ### Available Makefile Targets
 
 | Target               | Description                                     | Example / Default                                       |
 |:---------------------|:------------------------------------------------|:--------------------------------------------------------|
 | `make install`       | Synchronize virtual environment with `uv`       | `make install`                                          |
+| `make run`           | Execute the main CLI entrypoint                 | `make run ARGS="--help"`                                |
 | `make index`         | Build search index for specified method         | `make index METHOD=lexical MAX_CHUNK_SIZE=2000`         |
 | `make search`        | Run a single query search                       | `make search QUERY="What is vLLM?" METHOD=hybrid K=5`   |
 | `make answer`        | Query the system and generate an LLM answer     | `make answer QUERY="How does PagedAttention work?" K=5` |
@@ -395,7 +371,6 @@ All five bonus objectives from Chapter IX of the subject are fully implemented:
 | `make evaluate-docs` | Evaluate Recall@k against ground-truth docs     | `make evaluate-docs`                                    |
 | `make evaluate-code` | Evaluate Recall@k against ground-truth code     | `make evaluate-code`                                    |
 | `make api`           | Launch local FastAPI server with uvicorn        | `make api`                                              |
-| `make pipeline`      | Run end-to-end evaluation pipeline              | `make pipeline`                                         |
 | `make debug`         | Run CLI under Python debugger (`pdb`)           | `make debug`                                            |
 | `make lint`          | Run strict `flake8` and `mypy` checks           | `make lint`                                             |
 | `make test`          | Run test suite via `pytest`                     | `make test`                                             |
@@ -435,12 +410,12 @@ Sample JSON Output:
   "question": "How does PagedAttention manage KV cache?",
   "retrieved_sources": [
     {
-      "file_path": "data/raw/vllm/vllm/core/block_manager.py",
+      "file_path": "data/raw/vllm-0.10.1/vllm/v1/core/kv_cache_manager.py",
       "first_character_index": 1240,
       "last_character_index": 2890
     },
     {
-      "file_path": "data/raw/vllm/docs/source/dev/kernel/paged_attention.rst",
+      "file_path": "data/raw/vllm-0.10.1/docs/design/paged_attention.md",
       "first_character_index": 350,
       "last_character_index": 1820
     }
@@ -462,16 +437,39 @@ Sample Output:
 The LLMEngine class is the core execution coordinator in vLLM, responsible for continuous batching, managing worker ranks, scheduling sequences, and interfacing with the model runner.
 ```
 
-### 4. Running Dataset Batch Search & Evaluation
+### 4. Running Dataset Batch Search, Evaluation & Answering (CLI)
 
-Process entire test datasets and verify Recall@k:
+Search a whole dataset (output directory scoped by dataset):
 
 ```bash
-# Search docs dataset
-make search-docs METHOD=hybrid
+uv run python -m src --method=lexical search_dataset \
+  --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
+  --k 10 \
+  --save_directory data/output/search_results/UnansweredQuestions
+```
 
-# Evaluate recall against ground truth
+Evaluate recall@k against the ground-truth dataset:
+
+```bash
+uv run python -m src evaluate \
+  --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+  --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json
+```
+
+Generate answers from the search results:
+
+```bash
+uv run python -m src answer_dataset \
+  --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+  --save_directory data/output/search_results_and_answer/UnansweredQuestions
+```
+
+The same pipeline is available through Makefile shortcuts:
+
+```bash
+make search-docs METHOD=hybrid
 make evaluate-docs
+make answer-docs
 ```
 
 ### 5. Running the Local HTTP REST API
@@ -520,14 +518,12 @@ curl -G "http://127.0.0.1:8000/answer" \
 
 ### AI Usage
 
-In accordance with 42 curriculum guidelines, artificial intelligence was used as an interactive
-pair-programming and design assistant throughout the project:
+AI assistants were used for the following tasks:
 
-- **Architecture & System Design**: Discussing trade-offs between dense, sparse, and reciprocal rank
-  fusion retrieval architectures, as well as planning the incremental caching strategy.
-- **Documentation**: Assisting in structuring markdown documentation, proofreading technical
-  explanations, and generating configuration templates.
-- **Code Review**: Identifying potential edge cases in character offset slicing, parameter
-  validation, and type annotations to ensure strict `mypy` and `flake8` compliance.
-  All core application logic, algorithm tuning, and integration components were developed and
-  verified by the author.
+- **Explaining methods and design patterns**: Clarifying concepts before implementing them, such as
+  caching strategies (search vs. answer caches, cache invalidation by chunk size and model),
+  Reciprocal Rank Fusion (RRF) for hybrid retrieval, and the facade architecture used for `RAGCore`.
+- **Code review**: Reviewing implemented modules for bugs, edge cases, `flake8`/`mypy` compliance,
+  and conformity with the subject requirements.
+- **Writing the README**: Helping structure and phrase this documentation, and checking that it
+  covers every section the subject requires.
