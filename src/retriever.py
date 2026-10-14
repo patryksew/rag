@@ -217,8 +217,8 @@ class HybridRetriever(Retriever):
         return sorted_sources[:k]
 
     def retrieve_one(self, query: str, k: int = 5) -> MinimalSearchResults:
-        bm25_results = self.bm25_retriever.retrieve_one(query, k=k)
-        embedding_results = self.embedding_retriever.retrieve_one(query, k=k)
+        bm25_results = self.bm25_retriever.retrieve_one(query, k=k * 2)
+        embedding_results = self.embedding_retriever.retrieve_one(query, k=k * 2)
         rrf_results = self._rrf(
             [bm25_results.retrieved_sources, embedding_results.retrieved_sources],
             k=k)
