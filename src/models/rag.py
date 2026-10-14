@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MinimalSource(BaseModel):
@@ -21,6 +21,12 @@ class MinimalSource(BaseModel):
 
 
 class ChunkData(MinimalSource):
+    """
+    Represents a chunk of data with its text content.
+
+    Attributes:
+        content (str): The chunk's text content.
+    """
     content: str
 
 

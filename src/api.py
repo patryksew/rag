@@ -1,10 +1,11 @@
-import uuid
+import logging
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from src.models import MinimalAnswer
-from src.models import MinimalSearchResults
-from src.retriever import Retriever
+from src.core import RAGCore
+from src.models import MinimalAnswer, MinimalSearchResults
+
+logger = logging.getLogger(__name__)
 
 
 class RAGAPI:
@@ -13,17 +14,7 @@ class RAGAPI:
     def __init__(self, max_chunk_size: int = 2000):
         print("Initializing RAG API (Loading index and models)...")
         self.max_chunk_size = max_chunk_size
-
-        from src.core import RAGCore
         self.core = RAGCore()
-
-        # Preload retrievers
-        self.core.preload_retriever("lexical", self.max_chunk_size)
-        self.core.preload_retriever("embedding", self.max_chunk_size)
-
-        # Preload model
-        _ = self.core.answer_generator
-
         self.app = FastAPI()
         self._setup_routes()
 
@@ -31,37 +22,59 @@ class RAGAPI:
         self.app.add_api_route("/search", self.search, methods=["GET"])
         self.app.add_api_route("/answer", self.answer, methods=["GET"])
 
-    def _get_retriever(self, method: str) -> Retriever:
-        if method not in ["lexical", "embedding"]:
-            raise HTTPException(status_code=400, detail=f"Invalid method: {method}")
-
-        try:
-            return self.core.get_retriever(method, self.max_chunk_size)
-        except ImportError as e:
-            raise HTTPException(
-                status_code=501,
-                detail=f"Method '{method}' is not available. Missing dependencies? Error: {e}"
-            )
-
-    def search(self, query: str, k: int = 5,
-               method: Literal["lexical", "embedding"] = "lexical") -> MinimalSearchResults:
+    def search(
+        self,
+        query: str,
+        k: int = 5,
+        method: Literal["lexical", "embedding", "hybrid"] = "lexical"
+    ) -> MinimalSearchResults:
         """Search endpoint that returns top-k retrieved sources."""
-        retriever = self._get_retriever(method)
-        return retriever.retrieve_one(query, k=k)
+        try:
+            return self.core.search(
+                query=query,
+                method=method,
+                k=k,
+                max_chunk_size=self.max_chunk_size
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except RuntimeError as e:
+            logger.error("Method '%s' is unavailable: %s", method, e)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Method '{method}' is currently unavailable. Is Ollama running?"
+            )
+        except Exception as e:
+            logger.exception("Unexpected error during search: %s", e)
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    def answer(self, query: str, k: int = 5,
-               method: Literal["lexical", "embedding"] = "lexical") -> MinimalAnswer:
+    def answer(
+        self,
+        query: str,
+        k: int = 5,
+        method: Literal["lexical", "embedding", "hybrid"] = "lexical"
+    ) -> MinimalAnswer:
         """
         Answer endpoint that uses the local model to generate an answer based on retrieved context.
         """
-        retriever = self._get_retriever(method)
-        result = retriever.retrieve_one(query, k=k)
-        answer = self.core.answer_generator.answer_one(query, result.retrieved_sources)
-
-        return MinimalAnswer(answer=answer,
-                             question_id=str(uuid.uuid4()),
-                             question=query,
-                             retrieved_sources=result.retrieved_sources)
+        try:
+            return self.core.answer(
+                query=query,
+                method=method,
+                k=k,
+                max_chunk_size=self.max_chunk_size
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except RuntimeError as e:
+            logger.error("Answer generation unavailable for method '%s': %s", method, e)
+            raise HTTPException(
+                status_code=503,
+                detail="Answer generation is currently unavailable. Is Ollama running?"
+            )
+        except Exception as e:
+            logger.exception("Unexpected error during answer generation: %s", e)
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 api_instance = RAGAPI()

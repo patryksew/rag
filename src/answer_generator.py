@@ -2,8 +2,7 @@ import ollama
 import sys
 from tqdm import tqdm
 
-from src.models import MinimalSource, StudentSearchResults, StudentSearchResultsAndAnswer, \
-    MinimalAnswer
+from src.models import MinimalSource
 from src.ollama_utils import ensure_model_is_pulled
 
 MODEL = "Qwen3:0.6b"
@@ -109,34 +108,3 @@ class AnswerGenerator:
             raise ValueError("No response from the model")
 
         return s
-
-    def answer_dataset(
-        self,
-        student_search_results: StudentSearchResults
-    ) -> StudentSearchResultsAndAnswer:
-        """
-        Generate answers for an entire dataset of search results.
-
-        Args:
-            student_search_results (StudentSearchResults): The search results for a dataset.
-
-        Returns:
-            StudentSearchResultsAndAnswer: The generated answers along with their search results.
-        """
-
-        result = StudentSearchResultsAndAnswer(k=student_search_results.k)
-
-        for search_result in tqdm(student_search_results.search_results, desc="Answering questions",
-                                  leave=False):
-            answer = self.answer_one(search_result.question, search_result.retrieved_sources)
-
-            result.search_results.append(
-                MinimalAnswer(
-                    question_id=search_result.question_id,
-                    answer=answer,
-                    retrieved_sources=search_result.retrieved_sources,
-                    question=search_result.question,
-                )
-            )
-
-        return result

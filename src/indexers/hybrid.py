@@ -23,3 +23,18 @@ class HybridIndexer(Indexer):
         embedding_retriever = self.embedding_indexer.process_files_from_directory(directory)
 
         return HybridRetriever(bm25_retriever, embedding_retriever)
+
+    def has_data_changes(self, directory: Path) -> bool:
+        """
+        Check if either the BM25 or embedding indexer has data changes.
+
+        Args:
+            directory: The root directory containing files to check.
+
+        Returns:
+            True if either underlying indexer detects data changes, False otherwise.
+        """
+        return (
+            self.bm25_indexer.has_data_changes(directory)
+            or self.embedding_indexer.has_data_changes(directory)
+        )

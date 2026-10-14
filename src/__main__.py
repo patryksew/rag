@@ -45,7 +45,7 @@ class RAGCLI:
             max_chunk_size: Maximum chunk size in characters (default: 2000).
         """
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        self.core.get_retriever(self.method, max_chunk_size)
+        self.core.index(self.method, max_chunk_size)
 
     def search(self, query: str, k: int = 5, max_chunk_size: int = 2000) -> None:
         """
@@ -57,8 +57,7 @@ class RAGCLI:
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        retriever = self.core.get_retriever(self.method, max_chunk_size)
-        result = retriever.retrieve_one(query, k=k)
+        result = self.core.search(query, self.method, k=k, max_chunk_size=max_chunk_size)
         print(result.model_dump_json(indent=4))
 
     def search_dataset(self, dataset_path: str, save_directory: str,
@@ -83,8 +82,9 @@ class RAGCLI:
             print(f"Error reading or parsing dataset file: {e}", file=sys.stderr)
             sys.exit(1)
 
-        retriever = self.core.get_retriever(self.method, max_chunk_size)
-        results = retriever.retrieve(dataset.rag_questions, k)
+        results = self.core.search_dataset(
+            dataset, self.method, k=k, max_chunk_size=max_chunk_size
+        )
 
         save_path = Path(save_directory)
         save_path.mkdir(parents=True, exist_ok=True)
@@ -107,10 +107,8 @@ class RAGCLI:
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        retriever = self.core.get_retriever(self.method, max_chunk_size)
-        result = retriever.retrieve_one(query, k)
-
-        print(self.core.answer_generator.answer_one(query, result.retrieved_sources))
+        result = self.core.answer(query, self.method, k=k, max_chunk_size=max_chunk_size)
+        print(result.answer)
 
     def answer_dataset(
         self, student_search_results_path: str, save_directory: str
@@ -136,7 +134,7 @@ class RAGCLI:
             print(f"Error reading or parsing search results file: {e}", file=sys.stderr)
             sys.exit(1)
 
-        result = self.core.answer_generator.answer_dataset(student_search_results)
+        result = self.core.answer_dataset(student_search_results)
 
         file_name = Path(student_search_results_path).name
         Path(save_directory).mkdir(parents=True, exist_ok=True)

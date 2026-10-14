@@ -192,3 +192,18 @@ class Indexer(ABC):
             A Retriever instance ready to execute queries.
         """
         ...
+
+    def has_data_changes(self, directory: Path) -> bool:
+        """
+        Check if there are data changes in the data directory since the last cache.
+
+        Args:
+            directory: The root directory containing files to check.
+
+        Returns:
+            True if there are data changes, False otherwise.
+        """
+
+        deltas = self._get_file_deltas(self._get_target_files(directory), self._load_cache())
+
+        return len(deltas.deleted_files) > 0 or len(deltas.modified_or_new_files) > 0
