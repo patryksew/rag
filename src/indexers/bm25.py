@@ -15,7 +15,7 @@ class BM25Indexer(Indexer):
     Indexer implementation using the BM25 algorithm.
     """
 
-    def __init__(self, max_chunk_size: int, chunker: Chunker | None = None, k1: float = 2.0,
+    def __init__(self, max_chunk_size: int, chunker: Chunker | None = None, k1: float = 1.5,
                  b: float = 0.9, delta: float = 0.5, method: str = 'lucene'):
         """
         Initialize the BM25Indexer.

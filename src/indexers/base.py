@@ -66,7 +66,7 @@ class Indexer(ABC):
         """
         target_files = []
         for path in directory.rglob("*"):
-            if path.is_file() and path.suffix in [".py", ".md"]:
+            if path.is_file() and path.suffix in [".py", ".md", ".txt"]:
                 try:
                     relative_path = path.relative_to(self._project_root)
                 except ValueError:

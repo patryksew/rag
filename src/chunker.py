@@ -58,7 +58,7 @@ class Chunker:
 
         if ext == ".py":
             splitter = self._python_splitter
-        elif ext == ".md":
+        elif ext in [".md", ".txt"]:
             splitter = self._markdown_splitter
         else:
             raise ValueError(f"Unsupported file type: {ext}")
