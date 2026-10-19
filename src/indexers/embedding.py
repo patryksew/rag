@@ -105,13 +105,13 @@ class EmbeddingIndexer(Indexer):
                 chunk.file_path in deltas.modified_or_new_files
             ]
 
-        if is_modified:
-            self._save_cache(cache)
-
         if index_exists:
             files_to_remove = deltas.deleted_files + deltas.modified_or_new_files
             self._remove_old_files(files_to_remove)
 
         self._build_index(chunked_files)
+
+        if is_modified:
+            self._save_chunking_cache(cache)
 
         return EmbeddingRetriever(self._collection)

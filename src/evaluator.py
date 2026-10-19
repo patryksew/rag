@@ -1,5 +1,9 @@
+import logging
+
 from src.models import StudentSearchResults, RagDataset, UnansweredQuestion, \
     MinimalSource, AnsweredQuestion
+
+logger = logging.getLogger(__name__)
 
 
 class Evaluator:
@@ -58,24 +62,30 @@ class Evaluator:
         return intersection / union
 
     @staticmethod
-    def _are_sources_valid(student: list[MinimalSource], truth: list[MinimalSource]) -> bool:
+    def _valid_sources(student: list[MinimalSource], truth: list[MinimalSource]) -> float:
         """
-        Check if any of the retrieved sources adequately match the ground truth sources.
+        Calculate the share of ground truth sources retrieved for a question.
 
         Args:
             student (list[MinimalSource]): The retrieved sources to evaluate.
             truth (list[MinimalSource]): The ground truth sources.
 
         Returns:
-            bool: True if at least one retrieved source is valid, False otherwise.
+            float: The recall score for the question, bounded between 0.0 and 1.0.
         """
-        for student_source in student:
-            for truth_source in truth:
+        valid = 0.0
+
+        if len(truth) == 0:
+            return 0.0
+
+        for truth_source in truth:
+            for student_source in student:
                 if student_source.file_path == truth_source.file_path:
                     if Evaluator._iou(student_source, truth_source) >= 0.05:
-                        return True
+                        valid += 1
+                        break
 
-        return False
+        return valid / len(truth)
 
     @staticmethod
     def evaluate(student_search_results_path: str, dataset_path: str) -> float:
@@ -89,18 +99,25 @@ class Evaluator:
         Returns:
             float: The calculated recall@k metric.
         """
-        with open(student_search_results_path, "r") as f:
-            student_search_results = StudentSearchResults.model_validate_json(f.read())
+        # noinspection broad-exception
+        try:
+            with open(student_search_results_path, "r") as f:
+                student_search_results = StudentSearchResults.model_validate_json(f.read())
 
-        with open(dataset_path, "r") as f:
-            dataset = RagDataset.model_validate_json(f.read())
+            with open(dataset_path, "r") as f:
+                dataset = RagDataset.model_validate_json(f.read())
+        except Exception as e:
+            logger.error("Error during opening data for evaluate:\n%s", e)
+            raise
 
-        sources_ok = 0
+        if len(dataset.rag_questions) == 0:
+            return 0.0
+
+        sources_ok = 0.0
 
         for student in student_search_results.search_results:
             q_id = student.question_id
             data = Evaluator._get_question_by_id(q_id, dataset.rag_questions)
-            if Evaluator._are_sources_valid(student.retrieved_sources, data.sources):
-                sources_ok += 1
+            sources_ok += Evaluator._valid_sources(student.retrieved_sources, data.sources)
 
         return sources_ok / len(dataset.rag_questions)

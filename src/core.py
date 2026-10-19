@@ -19,6 +19,22 @@ from src.models import (
 from src.retriever import Retriever
 
 
+def validate_k(k: int) -> None:
+    """
+    Raise an error if the k parameter is not valid.
+    Args:
+    k: Param to be validated.
+    Raises:
+        ValueError: If k <= 0.
+        TypeError: If k is not int.
+    """
+    if type(k) is not int:
+        raise TypeError("k must be an integer")
+
+    if k <= 0:
+        raise ValueError("k must be positive")
+
+
 class RAGCore:
     """
     Core RAG System facade that orchestrates indexing, retrieval, and answering.
@@ -260,6 +276,15 @@ class RAGCore:
         Returns:
             MinimalSearchResults: The top-k retrieved sources.
         """
+        validate_k(k)
+
+        if len(query.strip()) == 0:
+            return MinimalSearchResults(
+                question_id=str(uuid.uuid4()),
+                question=query,
+                retrieved_sources=[],
+            )
+
         self._validate_cache_state(method, max_chunk_size)
 
         cached_sources = self._query_cache.get_search(
@@ -304,6 +329,8 @@ class RAGCore:
         Returns:
             StudentSearchResults: The retrieval results for all questions.
         """
+        validate_k(k)
+
         self._validate_cache_state(method, max_chunk_size)
 
         questions = (
@@ -311,6 +338,8 @@ class RAGCore:
             if isinstance(dataset, RagDataset)
             else list(dataset)
         )
+
+        questions = [q for q in questions if len(q.question.strip())]
 
         results: list[MinimalSearchResults | None] = [None] * len(questions)
         misses_indices: list[int] = []
@@ -380,6 +409,8 @@ class RAGCore:
         Returns:
             MinimalAnswer: The generated answer combined with search results.
         """
+        validate_k(k)
+
         self._validate_cache_state(method, max_chunk_size)
 
         # 1. Fast path: check if search is already cached

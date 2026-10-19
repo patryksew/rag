@@ -52,7 +52,7 @@ class AnswerGenerator:
         """
         Ensures that the specified model is pulled.
         """
-        ensure_model_is_pulled(MODEL)
+        ensure_model_is_pulled(MODEL, client=self.client)
 
     def answer_one(self, question: str, sources: list[MinimalSource]) -> str:
         """
@@ -65,9 +65,18 @@ class AnswerGenerator:
         Returns:
             str: The generated answer.
         """
+        if not sources:
+            print("Cannot generate answer with no context")
+            return "Cannot generate answer with no context"
+
         content = ""
 
-        for source in sources:
+        # Ollama will truncate prompt if too long,
+        # reversing to have the least important sources truncated
+        reversed_sources = sources.copy()
+        reversed_sources.reverse()
+
+        for source in reversed_sources:
             try:
                 with open(source.file_path, "r", encoding="utf-8") as f:
                     content += "\n" + f.read()[
@@ -82,29 +91,29 @@ class AnswerGenerator:
             resp_gen = self.client.generate(
                 stream=True,
                 model=MODEL,
-                prompt=f"Answer the question based on passed information."
+                prompt=f"Information: {content}"
+                       f"Answer the question based on passed information."
                        f" Your answer must be short and concise:"
-                       f"Question: {question}\n"
-                       f"Information: {content}",
+                       f"Question: {question}\n",
                 think=False,
                 keep_alive=100
             )
         except Exception as e:
             print(f"Error communicating with Ollama client: {e}", file=sys.stderr)
-            return ""
+            return f"Error communicating with Ollama client: {e}"
 
         s = ""
 
         i = 0
-
-        for c in tqdm(resp_gen, desc="Generating answer", leave=False):
-            s += c.response if c.response is not None else ""
-            i += 1
-            # if not i % 1000:
-            #     print(s)
-            # print(s)
+        try:
+            for c in tqdm(resp_gen, desc="Generating answer", leave=False):
+                s += c.response if c.response is not None else ""
+                i += 1
+        except Exception as e:
+            print(f"Error communicating with Ollama client: {e}", file=sys.stderr)
+            return f"Error communicating with Ollama client: {e}"
 
         if not s:
-            raise ValueError("No response from the model")
+            return "Unable to get answer from Ollama"
 
         return s

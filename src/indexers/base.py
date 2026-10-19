@@ -163,7 +163,7 @@ class Indexer(ABC):
 
         return chunked_files
 
-    def _save_cache(self, cache: ChunkingCache) -> None:
+    def _save_chunking_cache(self, cache: ChunkingCache) -> None:
         """
         Save the chunking cache to disk.
 

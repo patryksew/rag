@@ -99,7 +99,9 @@ class BM25Indexer(Indexer):
 
         chunked_files = self._update_cache_and_get_chunks(deltas, cache)
 
-        if is_modified:
-            self._save_cache(cache)
+        index = self._build_index(chunked_files)
 
-        return self._build_index(chunked_files)
+        if is_modified:
+            self._save_chunking_cache(cache)
+
+        return index

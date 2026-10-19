@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+from typing import Any
 
 import fire
 
@@ -24,18 +25,21 @@ class RAGCLI:
     @staticmethod
     def _validate_max_chunk_size(max_chunk_size: int | str) -> int:
         """Validate the maximum chunk size parameter."""
-        try:
-            valid_size = int(max_chunk_size)
-        except (ValueError, TypeError):
-            print(">" * 20, "Invalid max_chunk_size. Using default value.", "<" * 20, sep="")
-            valid_size = 2000
 
-        if valid_size > 2000:
+        if type(max_chunk_size) is not int:
+            print("Invalid max_chunk_size. Must be an integer")
+            sys.exit(1)
+
+        if int(max_chunk_size) < 1:
+            print("Invalid max_chunk_size. Must be a positive integer")
+            sys.exit(1)
+
+        if max_chunk_size > 2000:
             print(">" * 20, "max_chunk_size cannot be greater than 2000. Using 2000 instead.",
                   "<" * 20, sep="")
-            valid_size = 2000
+            max_chunk_size = 2000
 
-        return valid_size
+        return max_chunk_size
 
     def index(self, max_chunk_size: int = 2000) -> None:
         """
@@ -47,7 +51,7 @@ class RAGCLI:
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
         self.core.index(self.method, max_chunk_size)
 
-    def search(self, query: str, k: int = 5, max_chunk_size: int = 2000) -> None:
+    def search(self, query: Any, k: int = 5, max_chunk_size: int = 2000) -> None:
         """
         Return the top-k sources for a single query.
 
@@ -56,8 +60,13 @@ class RAGCLI:
             k: The number of top sources to return.
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
+        query_str = str(query)
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        result = self.core.search(query, self.method, k=k, max_chunk_size=max_chunk_size)
+        try:
+            result = self.core.search(query_str, self.method, k=k, max_chunk_size=max_chunk_size)
+        except (ValueError, TypeError) as e:
+            print(e)
+            sys.exit(1)
         print(result.model_dump_json(indent=4))
 
     def search_dataset(self, dataset_path: str, save_directory: str,
@@ -82,22 +91,26 @@ class RAGCLI:
             print(f"Error reading or parsing dataset file: {e}", file=sys.stderr)
             sys.exit(1)
 
-        results = self.core.search_dataset(
-            dataset, self.method, k=k, max_chunk_size=max_chunk_size
-        )
+        try:
+            results = self.core.search_dataset(
+                dataset, self.method, k=k, max_chunk_size=max_chunk_size
+            )
+        except (ValueError, TypeError) as e:
+            print(e)
+            sys.exit(1)
 
-        save_path = Path(save_directory)
-        save_path.mkdir(parents=True, exist_ok=True)
         dataset_name = Path(dataset_path).name
+        save_path = Path(save_directory)
 
         try:
+            save_path.mkdir(parents=True, exist_ok=True)
             with open(save_path / dataset_name, "w", encoding="utf-8") as f:
                 f.write(results.model_dump_json(indent=2))
         except Exception as e:
             print(f"Error saving results to {save_path / dataset_name}: {e}", file=sys.stderr)
             sys.exit(1)
 
-    def answer(self, query: str, k: int, max_chunk_size: int = 2000) -> None:
+    def answer(self, query: Any, k: int = 5, max_chunk_size: int = 2000) -> None:
         """
         Answer a single query using the retrieved context.
 
@@ -106,8 +119,13 @@ class RAGCLI:
             k: The number of retrieved context chunks to use.
             max_chunk_size: Maximum chunk size used during indexing (default: 2000).
         """
+        query_str = str(query)
         max_chunk_size = self._validate_max_chunk_size(max_chunk_size)
-        result = self.core.answer(query, self.method, k=k, max_chunk_size=max_chunk_size)
+        try:
+            result = self.core.answer(query_str, self.method, k=k, max_chunk_size=max_chunk_size)
+        except (ValueError, TypeError) as e:
+            print(e)
+            sys.exit(1)
         print(result.answer)
 
     def answer_dataset(
@@ -137,9 +155,9 @@ class RAGCLI:
         result = self.core.answer_dataset(student_search_results)
 
         file_name = Path(student_search_results_path).name
-        Path(save_directory).mkdir(parents=True, exist_ok=True)
 
         try:
+            Path(save_directory).mkdir(parents=True, exist_ok=True)
             with open(f"{save_directory}/{file_name}", "w") as f:
                 f.write(result.model_dump_json(indent=2))
         except Exception as e:
@@ -154,7 +172,11 @@ class RAGCLI:
             student_search_results_path: Path to your search results JSON file.
             dataset_path: Path to the ground-truth dataset JSON file.
         """
-        print(f"Recall score: {Evaluator.evaluate(student_search_results_path, dataset_path)}")
+        try:
+            print(f"Recall score: {Evaluator.evaluate(student_search_results_path, dataset_path)}")
+        except Exception:
+            print("Could not evaluate")
+            sys.exit(1)
 
 
 def main() -> None:
