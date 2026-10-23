@@ -527,3 +527,4 @@ AI assistants were used for the following tasks:
   and conformity with the subject requirements.
 - **Writing the README**: Helping structure and phrase this documentation, and checking that it
   covers every section the subject requires.
+- **Testing**: Writing automated tests, suggesting edge cases.
